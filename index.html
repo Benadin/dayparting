@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campaign Selection with Constraints</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        /* Custom styles to match the provided screenshots */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"; background-color: #f3f4f6; }
+        .tab-active { border-bottom-width: 2px; border-color: #3b82f6; color: #3b82f6; }
+        .sidebar-item-active { background-color: #eef2ff; color: #3b82f6; font-weight: 500; border-radius: 0.375rem; }
+        .radio-custom { appearance: none; background-color: #fff; margin: 0; font: inherit; color: currentColor; width: 1.15em; height: 1.15em; border: 2px solid #9ca3af; border-radius: 50%; display: grid; place-content: center; }
+        .radio-custom::before { content: ""; width: 0.65em; height: 0.65em; border-radius: 50%; transform: scale(0); transition: 120ms transform ease-in-out; box-shadow: inset 1em 1em #2563eb; }
+        .radio-custom:checked::before { transform: scale(1); }
+        .radio-custom:checked { border-color: #2563eb; }
+        
+        /* Modal specific styling */
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.5); }
+        .table-row-hover:hover { background-color: #f9fafb; }
+        .add-btn { transition: transform 0.1s; }
+        .add-btn:active { transform: scale(0.95); }
+        .add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        /* Checkbox styling */
+        .checkbox-custom { appearance: none; background-color: #fff; margin: 0; font: inherit; color: currentColor; width: 1.15em; height: 1.15em; border: 2px solid #9ca3af; border-radius: 0.25rem; display: grid; place-content: center; }
+        .checkbox-custom::before { content: ""; width: 0.65em; height: 0.65em; transform: scale(0); transition: 120ms transform ease-in-out; box-shadow: inset 1em 1em #2563eb; transform-origin: bottom left; clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); }
+        .checkbox-custom:checked::before { transform: scale(1); }
+        .checkbox-custom:disabled { opacity: 0.5; background-color: #f3f4f6;}
+        
+        /* Matrix Input overrides */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .matrix-cell-input { background: transparent; border: none; outline: none; width: 100%; text-align: center; font-weight: 500; font-size: 0.875rem; }
+        .matrix-cell-input:focus { border: 1px solid #3b82f6; border-radius: 0.25rem; background: rgba(255,255,255,0.9); color: #111 !important; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Premium AI Animations */
+        @keyframes pulse-red-glow {
+            0%, 100% { background-color: rgba(239, 68, 68, 0.03); box-shadow: inset 0 0 0 rgba(239, 68, 68, 0); }
+            50% { background-color: rgba(239, 68, 68, 0.15); box-shadow: inset 0 0 25px rgba(239, 68, 68, 0.25); }
+        }
+        @keyframes pulse-blue-glow {
+            0%, 100% { background-color: rgba(59, 130, 246, 0.03); box-shadow: inset 0 0 0 rgba(59, 130, 246, 0); }
+            50% { background-color: rgba(59, 130, 246, 0.15); box-shadow: inset 0 0 25px rgba(59, 130, 246, 0.25); }
+        }
+        .cell-ai-computing-red { animation: pulse-red-glow 1.5s infinite ease-in-out; }
+        .cell-ai-computing-blue { animation: pulse-blue-glow 1.5s infinite ease-in-out; }
+        
+        .text-ai-decoding {
+            font-family: 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', monospace;
+            letter-spacing: -0.5px;
+            opacity: 0.7;
+        }
+
+        @keyframes premium-scan {
+            0% { transform: translateY(-100%); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(100%); opacity: 0; }
+        }
+        .ai-scanner-vertical {
+            background: linear-gradient(to bottom, transparent, rgba(59, 130, 246, 0.1) 40%, rgba(59, 130, 246, 0.3) 50%, rgba(59, 130, 246, 0.1) 60%, transparent);
+            animation: premium-scan 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        @keyframes ai-lock-flash {
+            0% { background-color: #ffffff; transform: scale(1.08); box-shadow: 0 0 30px rgba(255,255,255,1); z-index: 50; }
+            100% { transform: scale(1); box-shadow: none; z-index: 1; }
+        }
+        .cell-ai-lock { animation: ai-lock-flash 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    </style>
+</head>
+<body class="p-6 h-screen flex flex-col">
+
+    <!-- Screen 1: Initial Setup Screen -->
+    <div id="screen1" class="flex flex-col h-full max-w-6xl mx-auto w-full gap-6 transition-opacity duration-300">
+        
+        <!-- Top Navigation -->
+        <div class="flex gap-4 border-b border-gray-200 pb-2">
+            <button class="px-4 py-2 text-gray-500 hover:text-gray-700 font-medium">Advanced Rules</button>
+            <button class="px-4 py-2 text-gray-500 hover:text-gray-700 font-medium">Automation Preview</button>
+            <button class="px-4 py-2 tab-active font-medium rounded-full border border-blue-500 text-blue-600 bg-white">Dayparting</button>
+        </div>
+
+        <div class="flex gap-6 flex-1">
+            <!-- Sidebar -->
+            <div class="w-64 bg-white rounded-lg shadow-sm p-4 flex flex-col gap-2">
+                <div class="sidebar-item-active p-3 cursor-pointer">Level</div>
+                <div class="p-3 text-gray-600 hover:bg-gray-50 cursor-pointer rounded-md">Target</div>
+                <div class="p-3 text-gray-600 hover:bg-gray-50 cursor-pointer rounded-md">Duration</div>
+                <div class="p-3 text-gray-600 hover:bg-gray-50 cursor-pointer rounded-md">Setting Up</div>
+                <div class="p-3 text-gray-600 hover:bg-gray-50 cursor-pointer rounded-md">Review</div>
+            </div>
+
+            <!-- Main Content Area -->
+            <div class="flex-1 bg-white rounded-lg shadow-sm p-8 flex flex-col">
+                
+                <!-- Rule Name Input -->
+                <div class="mb-8">
+                    <label class="block text-xs text-gray-500 mb-1 ml-1">Enter Rule Name</label>
+                    <input type="text" value="Dayparting Rule-Bid-Level-May 13" class="w-full border border-gray-300 rounded-md p-3 text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                </div>
+
+                <h2 class="text-xl font-semibold text-gray-800 mb-6">Level of Dayparting</h2>
+                
+                <p class="text-sm text-gray-600 mb-4 font-medium">Choose the Sponsored Campaign Type</p>
+
+                <!-- Radio Options Group 1 -->
+                <div class="flex gap-8 mb-6 ml-2">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="radio" name="campaign_type" class="radio-custom" checked>
+                        <span class="text-gray-700">Sponsored Products</span>
+                    </label>
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="radio" name="campaign_type" class="radio-custom">
+                        <span class="text-gray-700">Sponsored Brands</span>
+                    </label>
+                </div>
+
+                <!-- Radio Options Group 2 -->
+                <div class="flex gap-8 mb-6 ml-6">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="radio" name="targeting_type" class="radio-custom" checked>
+                        <span class="text-sm font-medium text-gray-700">Manual Targeting</span>
+                    </label>
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="radio" name="targeting_type" class="radio-custom">
+                        <span class="text-sm font-medium text-gray-700">Automatic Targeting</span>
+                    </label>
+                </div>
+
+                <!-- Selection Options (Industry Standard Upgrade) -->
+                <div class="mb-8 ml-2 max-w-2xl">
+                    <p class="text-sm font-semibold text-gray-800 mb-3">Campaign Selection <span class="text-xs font-normal text-gray-500 ml-1">(Max 3)</span></p>
+                    
+                    <div class="space-y-3">
+                        <!-- Select Manually (Active State) -->
+                        <div class="relative flex items-start p-4 border border-blue-200 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow">
+                            <div class="flex-1 w-full">
+                                <div class="flex items-center justify-between mb-3">
+                                     <span class="text-sm font-medium text-gray-900">Select Specific Campaigns</span>
+                                     <button onclick="openModal()" class="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                                        <svg class="w-4 h-4 mr-2 -ml-1 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                        Browse Campaigns
+                                    </button>
+                                </div>
+                                
+                                <div class="bg-gray-50 rounded-md p-3 border border-gray-100 min-h-[60px] flex items-center">
+                                    <div id="selection-status" class="w-full">
+                                        <p class="text-sm text-gray-500 text-center w-full">No campaigns selected</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Actions -->
+                <div class="flex gap-4 mt-auto border-t border-gray-100 pt-6">
+                    <button onclick="goBackToScreen1()" class="px-6 py-2 text-blue-600 hover:text-blue-800 font-medium focus:outline-none text-sm transition-colors">Cancel</button>
+                    <button id="nextBtn" onclick="goToScreen2()" disabled class="px-8 py-2 bg-gray-200 text-gray-400 rounded-md font-medium text-sm transition-colors shadow-sm cursor-not-allowed">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Screen 2: Initial Steps of Dayparting (Duration) -->
+    <div id="screen2" class="flex flex-col h-full max-w-6xl mx-auto w-full gap-6 transition-opacity duration-300 hidden">
+        
+        <!-- Top Navigation -->
+        <div class="flex gap-4 border-b border-gray-200 pb-2">
+            <button class="px-4 py-2 text-gray-500 hover:text-gray-700 font-medium">Advanced Rules</button>
+            <button class="px-4 py-2 text-gray-500 hover:text-gray-700 font-medium">Automation Preview</button>
+            <button class="px-4 py-2 tab-active font-medium rounded-full border border-blue-500 text-blue-600 bg-white">Dayparting</button>
+        </div>
+
+        <div class="flex gap-6 flex-1">
+            <!-- Sidebar -->
+            <div class="w-64 bg-white rounded-lg shadow-sm p-4 flex flex-col gap-2">
+                <div class="p-3 text-gray-600 flex justify-between items-center cursor-pointer">
+                    Level
+                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <div class="p-3 text-gray-600 flex justify-between items-center cursor-pointer">
+                    Target
+                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <div class="sidebar-item-active p-3 cursor-pointer">Duration</div>
+                <div class="p-3 text-gray-600 hover:bg-gray-50 cursor-pointer rounded-md">Setting Up</div>
+                <div class="p-3 text-gray-600 hover:bg-gray-50 cursor-pointer rounded-md">Review</div>
+            </div>
+
+            <!-- Main Content Area -->
+            <div class="flex-1 bg-white rounded-lg shadow-sm p-8 flex flex-col">
+                <h2 class="text-xl font-semibold text-gray-800 mb-6">Initial Steps of Dayparting</h2>
+                
+                <h3 class="text-sm font-semibold text-gray-700 mb-4">Campaign Scheduling & Duration</h3>
+                
+                <div class="flex gap-6 mb-8 items-end">
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-xs text-gray-500 font-medium">Start date</label>
+                        <div class="relative">
+                            <input type="date" id="startDate" class="w-48 border border-gray-300 rounded-md p-2.5 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-xs text-gray-500 font-medium">End date</label>
+                        <div class="flex items-center gap-3">
+                            <input type="date" id="endDate" class="w-48 border border-gray-300 rounded-md p-2.5 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                            <span id="durationBadge" class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-gray-50 text-gray-500 border border-gray-200">+1 month to end</span>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 class="text-sm font-semibold text-gray-700 mb-4">Set Maximum Ceiling Bid</h3>
+                <div class="flex items-center mb-8">
+                    <div class="flex items-center justify-center bg-gray-200 border border-gray-300 border-r-0 rounded-l-md w-10 h-10 text-gray-500 font-medium">¥</div>
+                    <input type="number" step="0.1" value="4.6" class="w-24 border border-gray-300 rounded-r-md p-2 h-10 text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-gray-50 font-medium">
+                </div>
+
+                <!-- Footer Actions -->
+                <div class="flex gap-4 mt-auto border-t border-gray-100 pt-6">
+                    <button onclick="goBackToScreen1()" class="px-6 py-2 text-blue-600 hover:text-blue-800 font-medium focus:outline-none text-sm transition-colors">Cancel</button>
+                    <button onclick="goToScreen3()" class="px-8 py-2 bg-blue-600 text-white rounded-md font-medium text-sm transition-colors shadow-sm hover:bg-blue-700">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Screen 3: Setting Up (The AI Matrix) -->
+    <div id="screen3" class="flex flex-col h-full max-w-[1400px] mx-auto w-full gap-6 transition-opacity duration-300 hidden">
+        
+        <!-- Top Navigation -->
+        <div class="flex gap-4 border-b border-gray-200 pb-2">
+            <button class="px-4 py-2 text-gray-500 hover:text-gray-700 font-medium">Advanced Rules</button>
+            <button class="px-4 py-2 text-gray-500 hover:text-gray-700 font-medium">Automation Preview</button>
+            <button class="px-4 py-2 tab-active font-medium rounded-full border border-blue-500 text-blue-600 bg-white">Dayparting</button>
+        </div>
+
+        <div class="flex gap-6 flex-1">
+            <!-- Sidebar -->
+            <div class="w-48 bg-white/50 backdrop-blur-sm rounded-lg p-2 flex flex-col gap-1 border border-gray-100 h-fit sticky top-6">
+                <div class="p-3 text-sm font-medium text-gray-500 flex justify-between items-center cursor-pointer">
+                    Level
+                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <div class="p-3 text-sm font-medium text-gray-500 flex justify-between items-center cursor-pointer">
+                    Target
+                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <div class="p-3 text-sm font-medium text-gray-500 flex justify-between items-center cursor-pointer">
+                    Duration
+                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <div class="sidebar-item-active p-3 text-sm cursor-pointer shadow-sm border border-blue-100 bg-white">Setting Up</div>
+                <div class="p-3 text-sm font-medium text-gray-500 hover:bg-gray-50 cursor-pointer rounded-md">Review</div>
+            </div>
+
+            <!-- Main Content Area -->
+            <div class="flex-1 flex flex-col gap-6">
+                
+                <!-- Top Section: D3 Chart -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex-shrink-0 relative z-10">
+                    <div class="flex justify-between items-center mb-6">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs font-bold text-gray-500 tracking-wider">CHART AVERAGE FOR:</span>
+                            <div id="dayFilters" class="flex gap-2">
+                                <!-- Day pills injected here -->
+                            </div>
+                        </div>
+                        
+                        <!-- Fixed Date Dropdown (White Card Style) -->
+                        <div class="relative" id="dateDropdownContainer">
+                            <button onclick="toggleDateDropdown()" class="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow text-sm font-medium text-gray-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                <span id="dateDropdownText">Last 30 Days</span>
+                                <svg class="w-4 h-4 text-gray-400 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <!-- Dropdown Menu -->
+                            <div id="dateDropdownMenu" class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 hidden z-50 py-1 transition-all duration-200 transform origin-top-right">
+                                <a href="#" onclick="selectDateRange('Last 7 Days', event)" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">Last 7 Days</a>
+                                <a href="#" onclick="selectDateRange('Last 14 Days', event)" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">Last 14 Days</a>
+                                <a href="#" onclick="selectDateRange('Last 30 Days', event)" class="block px-4 py-2.5 text-sm text-blue-600 bg-blue-50 font-medium transition-colors">Last 30 Days</a>
+                                <a href="#" onclick="selectDateRange('Last 90 Days', event)" class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">Last 90 Days</a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="d3ChartContainer" class="h-48 w-full"></div>
+                </div>
+
+                <!-- Bottom Section: The AI Matrix -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col relative z-0 mb-8">
+                    
+                    <!-- Matrix Header -->
+                    <div class="px-6 py-5 border-b border-gray-100 flex justify-between items-start bg-gradient-to-r from-white to-gray-50 rounded-t-xl">
+                        <div>
+                            <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                Dynamic Bid Multipliers
+                            </h2>
+                            <p class="text-sm text-gray-500 mt-1">Edit multipliers directly in the grid. Base bid is 1.0x. Use the copy icon <svg class="w-3 h-3 inline text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg> to duplicate a perfect day.</p>
+                        </div>
+                        
+                        <!-- AI Status Badge -->
+                        <div id="aiStatusBadge" class="flex items-center gap-3 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full shadow-sm transition-colors duration-500">
+                            <div class="relative flex h-3 w-3">
+                              <span id="aiStatusPing" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 hidden"></span>
+                              <span class="relative inline-flex rounded-full h-3 w-3 bg-blue-600 transition-colors duration-500"></span>
+                            </div>
+                            <div class="flex flex-col">
+                                <span id="aiStatusText" class="text-xs font-bold text-blue-700 uppercase tracking-wider transition-colors duration-500">AI Suggested Setup</span>
+                                <span id="aiSubtitle" class="text-[10px] text-blue-500 font-medium">Safe starting bids based on past performance.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Matrix Grid Container -->
+                    <div class="p-6">
+                        <div class="relative border border-gray-200 rounded-lg shadow-sm transition-all duration-500 overflow-hidden" id="matrixGridWrapper">
+                            
+                            <!-- Premium Scanner Overlay for AI Calculation -->
+                            <div id="matrixShimmer" class="absolute inset-0 z-30 pointer-events-none opacity-0 h-[200%] -top-[50%] transition-opacity duration-300">
+                                <div class="w-full h-full ai-scanner-vertical"></div>
+                            </div>
+
+                            <!-- Column Headers (Time Blocks) -->
+                            <div class="grid grid-cols-[60px_repeat(8,1fr)_48px] bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0 z-20 shadow-sm">
+                                <div class="flex items-center justify-center p-3 border-r border-gray-200">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                </div>
+                                <div class="flex items-center justify-center p-3 border-r border-gray-200">00:00</div>
+                                <div class="flex items-center justify-center p-3 border-r border-gray-200">03:00</div>
+                                <div class="flex items-center justify-center p-3 border-r border-gray-200">06:00</div>
+                                <div class="flex items-center justify-center p-3 border-r border-gray-200 relative overflow-hidden group/header">
+                                    <div class="absolute inset-0 bg-blue-500/10 opacity-0 group-hover/header:opacity-100 transition-opacity"></div>
+                                    <span class="relative z-10 text-blue-700">09:00</span>
+                                </div>
+                                <div class="flex items-center justify-center p-3 border-r border-gray-200">12:00</div>
+                                <div class="flex items-center justify-center p-3 border-r border-gray-200">15:00</div>
+                                <div class="flex items-center justify-center p-3 border-r border-gray-200 relative overflow-hidden group/header">
+                                     <div class="absolute inset-0 bg-blue-500/10 opacity-0 group-hover/header:opacity-100 transition-opacity"></div>
+                                    <span class="relative z-10 text-blue-700">18:00</span>
+                                </div>
+                                <div class="flex items-center justify-center p-3 border-r border-gray-200">21:00</div>
+                                <div class="flex items-center justify-center p-3">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                </div>
+                            </div>
+                            
+                            <!-- Dynamic Rows -->
+                            <div id="matrixContainer" class="flex flex-col bg-white">
+                                <!-- JS will inject rows here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer Actions -->
+                    <div class="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 mt-auto rounded-b-xl z-10">
+                        <button onclick="goBackToScreen2()" class="px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-sm transition-colors shadow-sm">Back</button>
+                        <button class="px-8 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm transition-colors shadow-md hover:shadow-lg transform active:scale-95 flex items-center gap-2">
+                            Deploy Automation
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Copy Sync Toast -->
+    <div id="syncToast" class="fixed top-6 right-6 bg-green-50 border-l-4 border-green-500 p-4 rounded shadow-lg transform translate-x-full opacity-0 transition-all duration-300 z-[70] flex items-center gap-3">
+        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <p id="syncToastText" class="text-sm font-medium text-green-800">Copied to all days!</p>
+    </div>
+
+    <!-- Campaign Selection Modal (Hidden by default) -->
+    <div id="modalOverlay" class="fixed inset-0 modal-overlay z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+        <div id="modalContent" class="bg-white w-full max-w-5xl rounded-xl shadow-2xl flex flex-col max-h-[85vh] transform scale-95 opacity-0 transition-all duration-300 overflow-hidden m-4">
+            <!-- Modal Header -->
+            <div class="px-6 py-5 border-b border-gray-200 bg-white z-10 flex flex-col gap-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-semibold text-gray-800">Select Campaigns Manually</h2>
+                    <span class="text-sm text-gray-500 font-medium bg-gray-100 px-3 py-1 rounded-full"><span id="headerCounter">0</span> / 3 Selected</span>
+                </div>
+                
+                <!-- Filters Bar -->
+                <div class="flex gap-4 items-center">
+                    <div class="relative flex-1 max-w-xs">
+                        <input type="text" placeholder="Search for Campaign(s)" class="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500">
+                        <svg class="w-4 h-4 absolute right-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <div class="w-10 h-5 bg-gray-200 rounded-full relative cursor-pointer">
+                            <div class="w-4 h-4 bg-white rounded-full absolute left-0.5 top-0.5 shadow-sm"></div>
+                        </div>
+                        <span class="text-sm text-gray-600">Exclude Campaign(s)</span>
+                    </div>
+
+                    <div class="ml-auto flex gap-4">
+                        <div class="flex flex-col gap-1">
+                            <span class="text-[10px] uppercase font-bold text-gray-400">Status</span>
+                            <select class="border border-gray-300 rounded-md py-1.5 pl-3 pr-8 text-sm focus:outline-none focus:border-blue-500 bg-white">
+                                <option>Enabled</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <span class="text-[10px] uppercase font-bold text-gray-400">Portfolio Name</span>
+                            <select class="border border-gray-300 rounded-md py-1.5 pl-3 pr-8 text-sm focus:outline-none focus:border-blue-500 bg-white">
+                                <option>All</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Select All (Disabled State) -->
+                <div class="flex items-center gap-3 mt-2">
+                    <label class="flex items-center gap-2 cursor-not-allowed opacity-50">
+                        <input type="checkbox" class="checkbox-custom" disabled>
+                        <span class="text-sm font-medium text-gray-500">Select All (7)</span>
+                    </label>
+                    <span class="text-xs text-red-500 italic">Unavailable: Exceeds 3 campaign limit</span>
+                </div>
+            </div>
+
+            <!-- Modal Body Container -->
+            <div class="flex flex-1 overflow-hidden bg-white">
+                <!-- Left Side: List -->
+                <div class="w-2/3 flex flex-col border-r border-gray-100">
+                    <!-- Table Header -->
+                    <div class="px-6 py-3 bg-gray-50 grid grid-cols-[3fr_1fr_1fr] gap-4 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                        <div>Campaign</div>
+                        <div class="text-center">Campaign Type</div>
+                        <div>Status</div>
+                    </div>
+
+                    <!-- List Container -->
+                    <div class="flex-1 overflow-y-auto" id="campaignList">
+                        <!-- Items injected by JS -->
+                    </div>
+
+                    <!-- Pagination -->
+                    <div class="px-6 py-3 border-t border-gray-200 flex justify-between items-center bg-gray-50">
+                        <span class="text-sm text-gray-600" id="bottomCounter">0 item(s) selected</span>
+                        <div class="flex items-center gap-4 text-sm text-gray-600">
+                            <span>Items per page: 50</span>
+                            <span>1 - 7 of 7</span>
+                            <div class="flex gap-2">
+                                <button class="p-1 text-gray-400 hover:text-gray-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg></button>
+                                <button class="p-1 text-gray-400 hover:text-gray-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Side: Preview -->
+                <div class="w-1/3 flex flex-col bg-gray-50 border-l border-gray-200">
+                    <div class="p-6 h-full flex flex-col">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="font-semibold text-gray-800">Preview</h3>
+                            <button onclick="removeAll()" id="removeAllBtn" class="text-sm text-blue-600 hover:text-blue-800 hidden font-medium transition-colors">Remove all</button>
+                        </div>
+                        
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-medium text-gray-600">Selected Campaigns (<span id="previewCounter">0</span>/3)</span>
+                        </div>
+
+                        <!-- Progress Bar for selection limit -->
+                        <div class="w-full bg-gray-200 rounded-full h-2 mb-6 overflow-hidden">
+                            <div class="bg-blue-600 h-2 rounded-full transition-all duration-500 ease-out" id="selectionProgress" style="width: 0%"></div>
+                        </div>
+
+                        <div id="previewList" class="flex-1 overflow-y-auto empty:hidden flex flex-col gap-3">
+                            <!-- Preview items injected by JS -->
+                        </div>
+                        
+                        <!-- Empty state -->
+                        <div id="previewEmpty" class="flex-1 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl bg-white/50">
+                            <svg class="w-10 h-10 mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                            <p class="text-sm font-medium">Select up to 3 campaigns</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-4 bg-gray-50/80 backdrop-blur-sm z-10">
+                <button onclick="closeModal()" class="px-6 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-md font-medium focus:outline-none transition-colors text-sm">Cancel</button>
+                <button onclick="confirmSelection()" id="addCampaignsBtn" class="px-8 py-2 bg-gray-200 text-gray-400 rounded-md font-medium cursor-not-allowed transition-all shadow-sm text-sm" disabled>Confirm Selection</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Toast (Hidden by default) -->
+    <div id="limitAlert" class="fixed top-4 right-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-md transform translate-x-full transition-transform duration-300 z-[60] flex items-center gap-3">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        <div>
+            <p class="font-bold text-sm">Limit Reached</p>
+            <p class="text-xs">You can only select a maximum of 3 campaigns.</p>
+        </div>
+    </div>
+
+    <script>
+        // Sample Data
+        const campaignsData = [
+            { id: 'c1', name: 'NN_SP_Lip Oil_All_Auto_Close/Loose', type: 'SP' },
+            { id: 'c2', name: 'IMM_SP_Multi Stick Shading_Auto_Close/Loose', type: 'SP' },
+            { id: 'c3', name: 'NN_SP_Lip Oil_Appleplum_GK_E', type: 'SP' },
+            { id: 'c4', name: 'NN_SP_Lip Oil_Appleblacktea_GK_E', type: 'SP' },
+            { id: 'c5', name: 'IMM_SP_Multi Stick Shading_003Light Cool_GK_B_Shading', type: 'SP' },
+            { id: 'c6', name: 'NN_SP_Lip Oil_Appleberry_GK_E', type: 'SP' },
+            { id: 'c7', name: 'IMM_SP_Brand_BP', type: 'SP' }
+        ];
+
+        let selectedCampaigns = new Set();
+        const MAX_CAMPAIGNS = 3;
+
+        // DOM Elements
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalContent = document.getElementById('modalContent');
+        const campaignListEl = document.getElementById('campaignList');
+        const previewListEl = document.getElementById('previewList');
+        const previewEmptyEl = document.getElementById('previewEmpty');
+        const addCampaignsBtn = document.getElementById('addCampaignsBtn');
+        const removeAllBtn = document.getElementById('removeAllBtn');
+        const limitAlert = document.getElementById('limitAlert');
+        const selectionProgress = document.getElementById('selectionProgress');
+        const screen1SelectionStatus = document.getElementById('selection-status');
+        const nextBtn = document.getElementById('nextBtn');
+
+        // Render List
+        function renderCampaignList() {
+            campaignListEl.innerHTML = '';
+            
+            campaignsData.forEach(camp => {
+                const isSelected = selectedCampaigns.has(camp.id);
+                // Disable Add button if limit reached AND this item isn't already selected
+                const isLimitReached = selectedCampaigns.size >= MAX_CAMPAIGNS;
+                const isDisabled = !isSelected && isLimitReached;
+                
+                const row = document.createElement('div');
+                row.className = `px-6 py-4 grid grid-cols-[3fr_1fr_1fr_1fr] gap-4 items-center border-b border-gray-100 table-row-hover transition-colors ${isSelected ? 'bg-blue-50/50' : ''}`;
+                
+                // Truncate long names slightly for neatness
+                const displayName = camp.name.length > 50 ? camp.name.substring(0, 47) + '...' : camp.name;
+
+                row.innerHTML = `
+                    <div class="text-sm text-gray-800 break-words pr-4" title="${camp.name}">${displayName}</div>
+                    <div class="flex justify-center">
+                        <span class="text-xs font-semibold text-yellow-600 border border-yellow-400 rounded px-2 py-0.5">${camp.type}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm text-gray-600">Enabled</span>
+                        <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                    </div>
+                    <div class="flex justify-end">
+                        ${isSelected ? 
+                            `<button onclick="toggleSelection('${camp.id}')" class="add-btn w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-200" title="Remove">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
+                            </button>` 
+                            : 
+                            `<button onclick="toggleSelection('${camp.id}')" class="add-btn w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 disabled:bg-gray-300" ${isDisabled ? 'disabled' : ''} title="${isDisabled ? 'Limit reached' : 'Add'}">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            </button>`
+                        }
+                    </div>
+                `;
+                campaignListEl.appendChild(row);
+            });
+        }
+
+        // Render Preview
+        function renderPreview() {
+            previewListEl.innerHTML = '';
+            
+            if (selectedCampaigns.size === 0) {
+                previewEmptyEl.classList.remove('hidden');
+                previewListEl.classList.add('hidden');
+                removeAllBtn.classList.add('hidden');
+            } else {
+                previewEmptyEl.classList.add('hidden');
+                previewListEl.classList.remove('hidden');
+                removeAllBtn.classList.remove('hidden');
+                
+                selectedCampaigns.forEach(id => {
+                    const camp = campaignsData.find(c => c.id === id);
+                    const item = document.createElement('div');
+                    item.className = 'flex justify-between items-center p-3 bg-gray-50 border border-gray-100 rounded-md text-sm shadow-sm group';
+                    item.innerHTML = `
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <span class="text-[10px] font-bold text-gray-500 border border-gray-300 rounded px-1">${camp.type}</span>
+                            <span class="truncate text-gray-700" title="${camp.name}">${camp.name}</span>
+                        </div>
+                        <button onclick="toggleSelection('${camp.id}')" class="text-gray-400 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    `;
+                    previewListEl.appendChild(item);
+                });
+            }
+
+            // Update Counters & UI states
+            const count = selectedCampaigns.size;
+            
+            const headerCounterEl = document.getElementById('headerCounter');
+            const previewCounterEl = document.getElementById('previewCounter');
+            const bottomCounterEl = document.getElementById('bottomCounter');
+            
+            if (headerCounterEl) headerCounterEl.innerText = count;
+            if (previewCounterEl) previewCounterEl.innerText = count;
+            if (bottomCounterEl) bottomCounterEl.innerText = `${count} item(s) selected`;
+            
+            // Update Progress bar color based on count
+            if (selectionProgress) {
+                selectionProgress.style.width = `${(count / MAX_CAMPAIGNS) * 100}%`;
+                if(count === MAX_CAMPAIGNS) {
+                    selectionProgress.classList.remove('bg-blue-600');
+                    selectionProgress.classList.add('bg-green-500');
+                } else {
+                    selectionProgress.classList.add('bg-blue-600');
+                    selectionProgress.classList.remove('bg-green-500');
+                }
+            }
+
+            // Toggle Primary Button state
+            if (count > 0) {
+                addCampaignsBtn.classList.remove('bg-gray-200', 'text-gray-400', 'cursor-not-allowed');
+                addCampaignsBtn.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+                addCampaignsBtn.disabled = false;
+            } else {
+                addCampaignsBtn.classList.add('bg-gray-200', 'text-gray-400', 'cursor-not-allowed');
+                addCampaignsBtn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+                addCampaignsBtn.disabled = true;
+            }
+        }
+
+        // Action Handlers
+        function toggleSelection(id) {
+            if (selectedCampaigns.has(id)) {
+                selectedCampaigns.delete(id);
+            } else {
+                if (selectedCampaigns.size >= MAX_CAMPAIGNS) {
+                    showLimitAlert();
+                    return;
+                }
+                selectedCampaigns.add(id);
+            }
+            renderCampaignList();
+            renderPreview();
+        }
+
+        function removeAll() {
+            selectedCampaigns.clear();
+            renderCampaignList();
+            renderPreview();
+        }
+
+        function showLimitAlert() {
+            limitAlert.classList.remove('translate-x-full');
+            setTimeout(() => {
+                limitAlert.classList.add('translate-x-full');
+            }, 3000);
+        }
+
+        // Modal Controls
+        function openModal() {
+            modalOverlay.classList.remove('hidden');
+            // Small delay for transition
+            setTimeout(() => {
+                modalOverlay.classList.remove('opacity-0');
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+            renderCampaignList();
+            renderPreview();
+        }
+
+        function closeModal() {
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            modalOverlay.classList.add('opacity-0');
+            
+            setTimeout(() => {
+                modalOverlay.classList.add('hidden');
+            }, 300);
+        }
+
+        function confirmSelection() {
+            const count = selectedCampaigns.size;
+            if(count > 0) {
+                // Upgraded status badge and list
+                let selectedNamesHTML = '<ul class="mt-2 space-y-1">';
+                selectedCampaigns.forEach(id => {
+                    const camp = campaignsData.find(c => c.id === id);
+                    selectedNamesHTML += `
+                        <li class="flex items-center text-sm text-gray-700 bg-white border border-gray-200 rounded px-3 py-1.5 shadow-sm">
+                           <svg class="w-4 h-4 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                           <span class="truncate">${camp.name}</span>
+                        </li>`;
+                });
+                selectedNamesHTML += '</ul>';
+
+                screen1SelectionStatus.innerHTML = `
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                            ${count} selected
+                        </span>
+                    </div>
+                    ${selectedNamesHTML}
+                `;
+                
+                nextBtn.classList.remove('bg-gray-200', 'text-gray-400', 'cursor-not-allowed');
+                nextBtn.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+                nextBtn.disabled = false;
+                
+                closeModal();
+            } else {
+                 screen1SelectionStatus.innerHTML = `<p class="text-sm text-gray-500 text-center w-full">No campaigns selected</p>`;
+                 nextBtn.classList.add('bg-gray-200', 'text-gray-400', 'cursor-not-allowed');
+                 nextBtn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+                 nextBtn.disabled = true;
+                 closeModal();
+            }
+        }
+
+        // Initialize
+        renderCampaignList();
+        renderPreview();
+        
+        // Navigation Logic
+        const screen1 = document.getElementById('screen1');
+        const screen2 = document.getElementById('screen2');
+
+        function goToScreen2() {
+            if (screen1) screen1.classList.add('hidden');
+            if (screen2) screen2.classList.remove('hidden');
+        }
+
+        function goBackToScreen1() {
+            if (screen2) screen2.classList.add('hidden');
+            if (screen1) screen1.classList.remove('hidden');
+        }
+
+        const screen3 = document.getElementById('screen3');
+        const dayFiltersContainer = document.getElementById('dayFilters');
+        const syncToast = document.getElementById('syncToast');
+        const syncToastText = document.getElementById('syncToastText');
+
+        function goToScreen3() {
+            screen2.classList.add('hidden');
+            screen3.classList.remove('hidden');
+            
+            // Initialize graph immediately so it doesn't wait for animation
+            setTimeout(() => {
+                if (!svg) {
+                   initD3Chart();
+                }
+                updateD3Chart();
+            }, 50);
+
+            startCrunchingAnimation();
+        }
+
+        function goBackToScreen2() {
+            screen3.classList.add('hidden');
+            screen2.classList.remove('hidden');
+        }
+
+        // Data Models
+        const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        let activeFilterDays = [0, 1, 2, 3, 4, 5, 6]; // All active by default
+        let isCalculating = false;
+        let dateRangeMultiplier = 1; // Used to simulate data changes
+        let showROAS = true; // Legend toggle state
+        let showCTR = true;  // Legend toggle state
+        
+        // Baseline accurate mock data mirroring the screenshot (Will be overwritten by AI init)
+        const baselineMatrixData = [
+            [0, 0, 0, 0, 0, 0, 0, 0], // Mon
+            [0, 0, 0, 0, 0, 0, 0, 0], // Tue
+            [0, 0, 0, 0, 0, 0, 0, 0], // Wed
+            [0, 0, 0, 0, 0, 0, 0, 0], // Thu
+            [0, 0, 0, 0, 0, 0, 0, 0], // Fri
+            [0, 0, 0, 0, 0, 0, 0, 0], // Sat
+            [0, 0, 0, 0, 0, 0, 0, 0]  // Sun
+        ];
+        
+        let currentMatrixData = JSON.parse(JSON.stringify(baselineMatrixData)); // Deep copy
+
+        // Distinct baseline profiles for each day to make the chart visibly dynamic when filtering
+        // [00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00]
+        const dayProfiles = [
+            { roas: [0, 2, 6, 4, 5, 2, 8, 2], ctr: [0, 3, 9, 6, 7, 2, 11, 1] },   // Mon
+            { roas: [1, 3, 5, 5, 4, 3, 7, 3], ctr: [1, 4, 8, 5, 6, 3, 10, 2] },   // Tue
+            { roas: [0, 1, 4, 6, 6, 4, 9, 4], ctr: [0, 2, 7, 7, 8, 4, 12, 3] },   // Wed
+            { roas: [2, 4, 7, 3, 5, 1, 6, 1], ctr: [2, 5, 10, 4, 7, 1, 9,  1] },  // Thu
+            { roas: [1, 2, 8, 8, 7, 5, 10, 5], ctr: [1, 3, 11, 9, 9, 5, 14, 4] }, // Fri
+            { roas: [3, 6, 3, 2, 8, 9, 12, 8], ctr: [3, 7, 5, 3, 10, 10, 15, 6] },// Sat (Weekend shift)
+            { roas: [4, 7, 2, 1, 9, 10, 14, 9], ctr: [4, 8, 4, 2, 11, 12, 16, 7] }// Sun (Weekend shift)
+        ];
+
+        function formatCellVal(val) {
+            if (val === 0 || val === null || val === '') return '--';
+            // Force 1 decimal point for all values
+            return val > 0 ? `+${Number(val).toFixed(1)}%` : `${Number(val).toFixed(1)}%`;
+        }
+
+        function applyCellStyles(cell, val) {
+            // Base cell classes
+            cell.className = `matrix-cell relative group flex items-center justify-center p-1 border-r border-gray-100 last:border-0 transition-all duration-300`;
+            
+            // Get the input element inside the cell to specifically target text color
+            const input = cell.querySelector('input');
+            if (!input) return;
+            
+            // Reset input classes
+            input.classList.remove('text-white', 'text-gray-400', 'font-bold');
+            
+            if (val !== 0 && val !== '--' && val !== null && val !== '') {
+                // Determine opacity based on intensity
+                let intensity = Math.min(Math.abs(val) / 40, 1);
+                let alpha = 0.6 + (intensity * 0.4); // Higher base alpha for richer color
+                
+                if (val > 0) {
+                    // Premium Blue
+                    cell.style.backgroundColor = `rgba(59, 130, 246, ${alpha})`; 
+                    cell.style.boxShadow = `inset 0 0 10px rgba(255,255,255,0.15)`;
+                } else {
+                    // Premium Red
+                    cell.style.backgroundColor = `rgba(239, 68, 68, ${alpha})`; 
+                    cell.style.boxShadow = `inset 0 0 10px rgba(255,255,255,0.15)`;
+                }
+                
+                // Force strict white text for readability
+                input.style.color = '#ffffff';
+                input.style.textShadow = '0 1px 2px rgba(0,0,0,0.2)'; // Drop shadow for contrast
+                input.classList.add('font-bold', 'text-white');
+                cell.style.zIndex = "1";
+            } else {
+                // Inactive state
+                cell.style.backgroundColor = 'transparent';
+                cell.style.boxShadow = 'none';
+                input.style.color = ''; // Revert to CSS default
+                input.style.textShadow = 'none';
+                input.classList.add('text-gray-400');
+                cell.style.zIndex = "0";
+            }
+        }
+
+        function updateCellView(dIdx, bIdx) {
+            const cell = document.getElementById(`cell-${dIdx}-${bIdx}`);
+            const input = document.getElementById(`input-${dIdx}-${bIdx}`);
+            const val = currentMatrixData[dIdx][bIdx];
+            
+            input.value = formatCellVal(val);
+            applyCellStyles(cell, val);
+        }
+
+        function handleValueChange(dIdx, bIdx, delta) {
+            if (isCalculating) return;
+            let current = currentMatrixData[dIdx][bIdx] || 0;
+            current += delta;
+            // Clamp roughly between -100 and +500
+            if (current < -100) current = -100;
+            if (current > 500) current = 500;
+            
+            currentMatrixData[dIdx][bIdx] = Math.round(current * 10) / 10;
+            updateCellView(dIdx, bIdx);
+        }
+
+        function handleInputBlur(dIdx, bIdx, rawValue) {
+            if (isCalculating) return;
+            let cleanVal = rawValue.replace(/[%+]/g, '').trim();
+            
+            if (cleanVal === '' || cleanVal === '-' || cleanVal === '--') {
+                currentMatrixData[dIdx][bIdx] = 0;
+            } else {
+                let num = parseFloat(cleanVal);
+                if (!isNaN(num)) {
+                    currentMatrixData[dIdx][bIdx] = Math.round(num * 10) / 10;
+                }
+            }
+            updateCellView(dIdx, bIdx);
+        }
+
+        function syncRowToAll(dIdx) {
+            if (isCalculating) return;
+            const sourceRow = [...currentMatrixData[dIdx]];
+            
+            for(let i=0; i<7; i++) {
+                if(i !== dIdx) {
+                    currentMatrixData[i] = [...sourceRow];
+                    for(let j=0; j<8; j++) {
+                        updateCellView(i, j);
+                    }
+                }
+            }
+            
+            // Show Toast
+            syncToastText.innerText = `Copied ${daysOfWeek[dIdx]} to the entire week!`;
+            syncToast.classList.remove('translate-x-full', 'opacity-0');
+            setTimeout(() => {
+                syncToast.classList.add('translate-x-full', 'opacity-0');
+            }, 3000);
+        }
+
+        function initMatrix() {
+            matrixContainer.innerHTML = '';
+            
+            daysOfWeek.forEach((day, dIdx) => {
+                const row = document.createElement('div');
+                row.className = 'grid grid-cols-[60px_repeat(8,1fr)_48px] items-stretch min-h-[48px] bg-white group/row hover:bg-gray-50';
+                
+                // Day Label
+                const dayLabel = document.createElement('div');
+                dayLabel.className = 'flex items-center justify-center font-medium text-gray-700 text-sm border-r border-gray-100';
+                dayLabel.innerText = day;
+                row.appendChild(dayLabel);
+                
+                // 8 Time Blocks
+                for(let bIdx = 0; bIdx < 8; bIdx++) {
+                    const cellWrapper = document.createElement('div');
+                    cellWrapper.id = `cell-${dIdx}-${bIdx}`;
+                    
+                    // Hover buttons
+                    const btnMinus = document.createElement('button');
+                    btnMinus.className = 'absolute left-1 w-5 h-5 rounded flex items-center justify-center bg-white/40 hover:bg-white/80 text-black font-bold hidden group-hover:flex z-20 shadow-sm backdrop-blur-sm transition-all';
+                    btnMinus.innerText = '-';
+                    btnMinus.onclick = () => handleValueChange(dIdx, bIdx, -5);
+                    
+                    const btnPlus = document.createElement('button');
+                    btnPlus.className = 'absolute right-1 w-5 h-5 rounded flex items-center justify-center bg-white/40 hover:bg-white/80 text-black font-bold hidden group-hover:flex z-20 shadow-sm backdrop-blur-sm transition-all';
+                    btnPlus.innerText = '+';
+                    btnPlus.onclick = () => handleValueChange(dIdx, bIdx, 5);
+
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.id = `input-${dIdx}-${bIdx}`;
+                    input.className = 'matrix-cell-input z-10 transition-colors duration-300';
+                    input.value = formatCellVal(currentMatrixData[dIdx][bIdx]);
+                    
+                    // Scroll Event
+                    cellWrapper.addEventListener('wheel', (e) => {
+                        if(isCalculating) return;
+                        e.preventDefault();
+                        handleValueChange(dIdx, bIdx, e.deltaY < 0 ? 5 : -5);
+                    }, {passive: false});
+
+                    // Type Event
+                    input.addEventListener('blur', (e) => handleInputBlur(dIdx, bIdx, e.target.value));
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') input.blur();
+                    });
+
+                    cellWrapper.appendChild(btnMinus);
+                    cellWrapper.appendChild(input);
+                    cellWrapper.appendChild(btnPlus);
+                    
+                    applyCellStyles(cellWrapper, currentMatrixData[dIdx][bIdx]);
+                    row.appendChild(cellWrapper);
+                }
+                
+                // Copy Row Action
+                const actionCell = document.createElement('div');
+                actionCell.className = 'flex items-center justify-center border-l border-gray-100 bg-gray-50';
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'p-1.5 text-gray-400 hover:text-blue-600 rounded hover:bg-blue-50 transition-colors tooltip';
+                copyBtn.title = `Copy ${day} to all days`;
+                copyBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>`;
+                copyBtn.onclick = () => syncRowToAll(dIdx);
+                
+                actionCell.appendChild(copyBtn);
+                row.appendChild(actionCell);
+                
+                matrixContainer.appendChild(row);
+            });
+        }
+
+        let svg, x, yLeft, yRight, lineROAS, lineCTR, xAxisGroup, yLeftGroup, yRightGroup, pathROAS, pathCTR, dotsROASGroup, dotsCTRGroup;
+
+        function initD3Chart() {
+            const container = document.getElementById('d3ChartContainer');
+            container.innerHTML = ''; // Clear
+            
+            // INCREASED top margin from 20 to 40 to make room for the legend
+            const margin = {top: 40, right: 30, bottom: 20, left: 30};
+            const width = container.offsetWidth - margin.left - margin.right;
+            const height = container.offsetHeight - margin.top - margin.bottom;
+
+            svg = d3.select("#d3ChartContainer")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            // Scales
+            x = d3.scalePoint()
+                .domain(['00:00', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00'])
+                .range([0, width]);
+
+            yLeft = d3.scaleLinear().domain([0, 10]).range([height, 0]);
+            yRight = d3.scaleLinear().domain([0, 16]).range([height, 0]);
+
+            // Gridlines
+            const makeYLines = () => d3.axisLeft(yLeft).ticks(5);
+            svg.append("g")
+                .attr("class", "grid")
+                .style("stroke-dasharray", ("3,3"))
+                .style("stroke-opacity", 0.1)
+                .call(makeYLines().tickSize(-width).tickFormat(""));
+
+            // Axes
+            xAxisGroup = svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x).tickSize(0).tickPadding(10))
+                .style("color", "#6b7280").style("font-size", "10px").style("font-family", "Inter");
+            xAxisGroup.select(".domain").remove(); // Remove bottom axis line
+
+            yLeftGroup = svg.append("g")
+                .call(d3.axisLeft(yLeft).ticks(5).tickSize(0).tickPadding(10))
+                .style("color", "#6b7280").style("font-size", "10px");
+            yLeftGroup.select(".domain").remove();
+            
+            // Y-Left Label
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", -margin.left + 10)
+                .attr("x", -height/2)
+                .attr("text-anchor", "middle")
+                .style("fill", "#6b7280").style("font-size", "10px").style("font-weight", "600").text("ROAS");
+
+            yRightGroup = svg.append("g")
+                .attr("transform", `translate(${width},0)`)
+                .call(d3.axisRight(yRight).ticks(5).tickSize(0).tickPadding(10))
+                .style("color", "#6b7280").style("font-size", "10px");
+            yRightGroup.select(".domain").remove();
+
+            // Y-Right Label
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", width + margin.right - 10)
+                .attr("x", -height/2)
+                .attr("text-anchor", "middle")
+                .style("fill", "#6b7280").style("font-size", "10px").style("font-weight", "600").text("CTR (%)");
+
+            // Line Generators
+            lineROAS = d3.line().curve(d3.curveMonotoneX)
+                .x((d, i) => x(x.domain()[i]))
+                .y(d => yLeft(d));
+
+            lineCTR = d3.line().curve(d3.curveMonotoneX)
+                .x((d, i) => x(x.domain()[i]))
+                .y(d => yRight(d));
+
+            // Append Paths (Empty initially)
+            pathROAS = svg.append("path")
+                .attr("fill", "none")
+                .attr("stroke", "#3b82f6") // Blue
+                .attr("stroke-width", 2);
+
+            pathCTR = svg.append("path")
+                .attr("fill", "none")
+                .attr("stroke", "#22c55e") // Green
+                .attr("stroke-width", 2)
+                .attr("stroke-dasharray", "4,4");
+
+            // Area under ROAS
+            svg.append("path")
+                .attr("class", "area-roas")
+                .attr("fill", "url(#roas-gradient)")
+                .style("opacity", 0.3);
+
+            // Gradient definition
+            const defs = svg.append("defs");
+            const gradient = defs.append("linearGradient")
+                .attr("id", "roas-gradient")
+                .attr("x1", "0%").attr("y1", "0%")
+                .attr("x2", "0%").attr("y2", "100%");
+            gradient.append("stop").attr("offset", "0%").attr("stop-color", "#3b82f6").attr("stop-opacity", 1);
+            gradient.append("stop").attr("offset", "100%").attr("stop-color", "#3b82f6").attr("stop-opacity", 0);
+
+            // Dot Groups
+            dotsROASGroup = svg.append("g");
+            dotsCTRGroup = svg.append("g");
+            
+            // Interactive Legend
+            const legend = svg.append("g").attr("transform", `translate(${width - 200}, -20)`);
+            
+            // ROAS Legend Item
+            const legendROAS = legend.append("g")
+                .style("cursor", "pointer")
+                .style("opacity", showROAS ? 1 : 0.4)
+                .on("click", function() {
+                    showROAS = !showROAS;
+                    d3.select(this).transition().duration(200).style("opacity", showROAS ? 1 : 0.4);
+                    updateD3ChartOpacity();
+                });
+            legendROAS.append("circle").attr("cx", 0).attr("cy", 0).attr("r", 5).style("fill", "white").style("stroke", "#3b82f6").style("stroke-width", 2.5);
+            legendROAS.append("text").attr("x", 10).attr("y", 4).text("Avg ROAS").style("font-size", "12px").style("font-weight", "500").style("fill", "#6b7280").style("font-family", "Inter");
+            
+            // CTR Legend Item
+            const legendCTR = legend.append("g")
+                .attr("transform", "translate(95, 0)")
+                .style("cursor", "pointer")
+                .style("opacity", showCTR ? 1 : 0.4)
+                .on("click", function() {
+                    showCTR = !showCTR;
+                    d3.select(this).transition().duration(200).style("opacity", showCTR ? 1 : 0.4);
+                    updateD3ChartOpacity();
+                });
+            legendCTR.append("circle").attr("cx", 0).attr("cy", 0).attr("r", 5).style("fill", "white").style("stroke", "#22c55e").style("stroke-width", 2.5);
+            legendCTR.append("text").attr("x", 10).attr("y", 4).text("Avg CTR (%)").style("font-size", "12px").style("font-weight", "500").style("fill", "#6b7280").style("font-family", "Inter");
+        }
+
+        function updateD3ChartOpacity() {
+            if(!svg) return;
+            pathROAS.transition().duration(300).style("opacity", showROAS ? 1 : 0);
+            svg.select(".area-roas").transition().duration(300).style("opacity", showROAS ? 0.3 : 0);
+            dotsROASGroup.transition().duration(300).style("opacity", showROAS ? 1 : 0);
+            
+            pathCTR.transition().duration(300).style("opacity", showCTR ? 1 : 0);
+            dotsCTRGroup.transition().duration(300).style("opacity", showCTR ? 1 : 0);
+        }
+
+        function getCalculatedChartData() {
+            // Aggregate data based on activeFilterDays to accurately reflect selected days
+            let currentROAS = Array(8).fill(0);
+            let currentCTR = Array(8).fill(0);
+            
+            if (activeFilterDays.length === 0) return {roas: currentROAS, ctr: currentCTR};
+            
+            activeFilterDays.forEach(dayIdx => {
+                for(let b=0; b<8; b++) {
+                    currentROAS[b] += dayProfiles[dayIdx].roas[b] * dateRangeMultiplier;
+                    currentCTR[b] += dayProfiles[dayIdx].ctr[b] * dateRangeMultiplier;
+                }
+            });
+            
+            for(let b=0; b<8; b++) {
+                currentROAS[b] = currentROAS[b] / activeFilterDays.length;
+                currentCTR[b] = currentCTR[b] / activeFilterDays.length;
+            }
+            return {roas: currentROAS, ctr: currentCTR};
+        }
+
+        function updateD3Chart() {
+            if(!svg) return;
+            const data = getCalculatedChartData();
+            
+            const areaROAS = d3.area().curve(d3.curveMonotoneX)
+                .x((d, i) => x(x.domain()[i]))
+                .y0(yLeft(0))
+                .y1(d => yLeft(d));
+
+            // Animate paths
+            pathROAS.datum(data.roas).transition().duration(500).attr("d", lineROAS);
+            pathCTR.datum(data.ctr).transition().duration(500).attr("d", lineCTR);
+            svg.select(".area-roas").datum(data.roas).transition().duration(500).attr("d", areaROAS);
+
+            // Bind ROAS dots
+            const dotsR = dotsROASGroup.selectAll("circle").data(data.roas);
+            dotsR.enter().append("circle")
+                .attr("r", 4).attr("fill", "white").attr("stroke", "#3b82f6").attr("stroke-width", 2)
+                .attr("cx", (d,i) => x(x.domain()[i]))
+                .attr("cy", d => yLeft(d))
+                .merge(dotsR)
+                .transition().duration(500)
+                .attr("cx", (d,i) => x(x.domain()[i]))
+                .attr("cy", d => yLeft(d));
+            dotsR.exit().remove();
+
+            // Bind CTR dots
+            const dotsC = dotsCTRGroup.selectAll("circle").data(data.ctr);
+            dotsC.enter().append("circle")
+                .attr("r", 4).attr("fill", "white").attr("stroke", "#22c55e").attr("stroke-width", 2)
+                .attr("cx", (d,i) => x(x.domain()[i]))
+                .attr("cy", d => yRight(d))
+                .merge(dotsC)
+                .transition().duration(500)
+                .attr("cx", (d,i) => x(x.domain()[i]))
+                .attr("cy", d => yRight(d));
+            dotsC.exit().remove();
+        }
+
+
+        function renderDayFilters() {
+            dayFiltersContainer.innerHTML = '';
+            daysOfWeek.forEach((day, idx) => {
+                const btn = document.createElement('button');
+                const isActive = activeFilterDays.includes(idx);
+                btn.className = `px-3 py-1 rounded-full text-xs font-bold transition-colors duration-200 ${isActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`;
+                btn.innerText = day;
+                
+                btn.onclick = () => {
+                    if (isActive) {
+                        activeFilterDays = activeFilterDays.filter(d => d !== idx);
+                    } else {
+                        activeFilterDays.push(idx);
+                        activeFilterDays.sort();
+                }
+                renderDayFilters();
+                updateD3Chart();
+            };
+            dayFiltersContainer.appendChild(btn);
+            });
+        }
+
+        // Date Range Dropdown Logic
+        function toggleDateDropdown() {
+            const menu = document.getElementById('dateDropdownMenu');
+            menu.classList.toggle('hidden');
+        }
+
+        function selectDateRange(range, event) {
+            event.preventDefault();
+            document.getElementById('dateDropdownText').innerText = range;
+            document.getElementById('dateDropdownMenu').classList.add('hidden');
+            
+            // Update active state styling on the list items
+            const items = document.querySelectorAll('#dateDropdownMenu a');
+            items.forEach(item => {
+                item.classList.remove('bg-blue-50', 'text-blue-600', 'font-medium');
+                if (item.innerText === range) {
+                    item.classList.add('bg-blue-50', 'text-blue-600', 'font-medium');
+                }
+            });
+
+            // Simulate data change by adjusting the multiplier and redrawing chart
+            dateRangeMultiplier = Math.random() * 0.4 + 0.8; // Random multiplier between 0.8 and 1.2
+            updateD3Chart();
+        }
+
+        // Close dropdown when clicking outside of it
+        document.addEventListener('click', function(event) {
+            const container = document.getElementById('dateDropdownContainer');
+            const menu = document.getElementById('dateDropdownMenu');
+            if (container && menu && !container.contains(event.target)) {
+                menu.classList.add('hidden');
+            }
+        });
+
+        function startCrunchingAnimation() {
+            isCalculating = true;
+            
+            // UI State Changes for AI Processing
+            const wrapper = document.getElementById('matrixGridWrapper');
+            const shimmer = document.getElementById('matrixShimmer');
+            const badge = document.getElementById('aiStatusBadge');
+            const badgePing = document.getElementById('aiStatusPing');
+            const badgeText = document.getElementById('aiStatusText');
+            const badgeSubtitle = document.getElementById('aiSubtitle');
+            const badgeDot = badge.querySelectorAll('span')[1]; // Safely target the solid dot
+            
+            // Set Processing State (Indigo Theme)
+            badge.className = 'flex items-center gap-3 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-full shadow-sm transition-colors duration-500';
+            badgePing.classList.remove('hidden');
+            badgePing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75';
+            badgeDot.className = 'relative inline-flex rounded-full h-3 w-3 bg-indigo-500 transition-colors duration-500';
+            
+            badgeText.className = 'text-xs font-bold text-indigo-700 uppercase tracking-wider transition-colors duration-500';
+            badgeSubtitle.className = 'text-[10px] text-indigo-500 font-medium';
+            badgeText.innerText = 'AI is checking historical data...';
+            badgeSubtitle.innerText = 'Finding the best times to run ads.';
+            
+            wrapper.style.pointerEvents = 'none';
+            wrapper.style.cursor = 'wait';
+            
+            // Confine AI animation strictly to the matrix box (no outer ring explosion)
+            wrapper.classList.remove('border-gray-200');
+            wrapper.classList.add('border-indigo-300');
+            
+            // Start Premium Scanner
+            shimmer.classList.remove('opacity-0');
+
+            // Target Columns for AI Baseline (09:00 is col 3, 18:00 is col 6)
+            const targetCols = [3, 6];
+            
+            // Initialize premium processing visual state
+            for(let i=0; i<7; i++) {
+                for(let j=0; j<8; j++) {
+                    const cell = document.getElementById(`cell-${i}-${j}`);
+                    const input = document.getElementById(`input-${i}-${j}`);
+                    
+                    if(cell && input) {
+                        // Reset any previous animations
+                        cell.classList.remove('cell-ai-lock');
+                        cell.style.transition = 'all 0.4s ease';
+
+                        if (targetCols.includes(j)) {
+                            // "Warming up" target columns with smooth CSS pulsing
+                            if (j === 3) {
+                                cell.classList.add('cell-ai-computing-red');
+                                input.style.color = '#ef4444'; // Soft red text during decode
+                            } else {
+                                cell.classList.add('cell-ai-computing-blue');
+                                input.style.color = '#3b82f6'; // Soft blue text during decode
+                            }
+                            
+                            input.classList.add('text-ai-decoding');
+                            input.style.textShadow = 'none';
+                            input.value = '...';
+                        } else {
+                            // Clear non-target columns smoothly
+                            input.value = '--';
+                            cell.style.backgroundColor = 'transparent';
+                            cell.style.boxShadow = 'none';
+                            input.style.color = '';
+                            input.classList.remove('text-white', 'font-bold', 'text-ai-decoding');
+                            input.classList.add('text-gray-400');
+                        }
+                    }
+                }
+            }
+
+            const startTime = Date.now();
+            const duration = 3000;
+            const chars = "0123456789";
+
+            // Premium "Data Decoding" Animation
+            const crunchInterval = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                const progress = elapsed / duration;
+
+                for(let i=0; i<7; i++) {
+                    for(let j=0; j<8; j++) {
+                        if (targetCols.includes(j)) {
+                            const input = document.getElementById(`input-${i}-${j}`);
+                            
+                            // Sequential row locking logic (Top rows lock first)
+                            const rowLockThreshold = (i / 7) * 0.7; // Rows lock between 0% and 70% of total time
+                            
+                            if (progress > rowLockThreshold + 0.2) {
+                                // This row is finalizing in the animation, stop scrambling it wildly
+                                continue; 
+                            }
+
+                            // Progressive decoding effect based on time
+                            let displayStr = "";
+                            if (progress < 0.2) {
+                                // Phase 1: Cryptographic scan
+                                displayStr = Array(5).fill(0).map(() => chars[Math.floor(Math.random() * chars.length)]).join('');
+                                input.value = displayStr;
+                            } else if (progress < 0.8) {
+                                // Phase 2: Rapid decimal cycling approaching target
+                                let randomVal;
+                                if (j === 3) { // 09:00 Negative
+                                    randomVal = -(15 + Math.random() * 10);
+                                    input.value = `${randomVal.toFixed(1)}%`;
+                                } else { // 18:00 Positive
+                                    randomVal = (15 + Math.random() * 10);
+                                    input.value = `+${randomVal.toFixed(1)}%`;
+                                }
+                            }
+                        }
+                    }
+                }
+            }, 50); // Fast interval for smooth text scrambling
+
+            // Resolve exactly at duration
+            setTimeout(() => {
+                clearInterval(crunchInterval);
+                isCalculating = false;
+                
+                // Cleanup Wrapper State
+                wrapper.style.pointerEvents = 'auto';
+                wrapper.style.cursor = 'default';
+                wrapper.classList.remove('border-indigo-300');
+                wrapper.classList.add('border-gray-200');
+                shimmer.classList.add('opacity-0');
+                
+                // Set Final AI Badge State (Conservative Profile - Blue Theme)
+                badge.className = 'flex items-center gap-3 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full shadow-sm transition-colors duration-500';
+                badgePing.classList.add('hidden');
+                badgeDot.className = 'relative inline-flex rounded-full h-3 w-3 bg-blue-600 transition-colors duration-500';
+                
+                badgeText.className = 'text-xs font-bold text-blue-700 uppercase tracking-wider transition-colors duration-500';
+                badgeSubtitle.className = 'text-[10px] text-blue-500 font-medium';
+                badgeText.innerText = 'AI Suggested Setup';
+                badgeSubtitle.innerText = 'Safe starting bids based on past performance.';
+                
+                // Generate Final AI Data
+                for(let i=0; i<7; i++) {
+                    for(let j=0; j<8; j++) {
+                        if (j === 3) { 
+                            currentMatrixData[i][j] = Math.round((-20 - Math.random() * 2) * 10) / 10;
+                        } else if (j === 6) { 
+                            currentMatrixData[i][j] = Math.round((19 + Math.random() * 2) * 10) / 10;
+                        } else {
+                            currentMatrixData[i][j] = 0;
+                        }
+                    }
+                }
+                
+                // Cascade final appearance with satisfying lock-in flash
+                for(let i=0; i<7; i++) {
+                    for(let j=0; j<8; j++) {
+                        const cell = document.getElementById(`cell-${i}-${j}`);
+                        const input = document.getElementById(`input-${i}-${j}`);
+                        
+                        if (targetCols.includes(j)) {
+                            // Stagger the finalization pop by row
+                            setTimeout(() => {
+                                // Clean up computing classes
+                                cell.classList.remove('cell-ai-computing-red', 'cell-ai-computing-blue');
+                                input.classList.remove('text-ai-decoding');
+                                
+                                // Apply true data values and strict white text
+                                updateCellView(i, j);
+                                
+                                // Trigger the tactile CSS flash animation
+                                cell.classList.add('cell-ai-lock');
+                                
+                            }, i * 80); // 80ms stagger creates a beautiful top-to-bottom wave
+                        } else {
+                             updateCellView(i, j);
+                        }
+                    }
+                }
+            }, duration);
+        }
+
+        // Run Initialization for Screen 3
+        initMatrix();
+        renderDayFilters();
+        
+        // Handle window resize for D3
+        window.addEventListener('resize', () => {
+            if(screen3 && !screen3.classList.contains('hidden') && svg) {
+                initD3Chart();
+                updateD3Chart();
+            }
+        });
+
+        // Initialize Dates on load
+        function initDates() {
+            const startDateInput = document.getElementById('startDate');
+            const endDateInput = document.getElementById('endDate');
+            
+            if (!startDateInput || !endDateInput) return; // Prevent errors if elements aren't rendered
+
+            const today = new Date();
+            const nextMonth = new Date(today);
+            nextMonth.setMonth(today.getMonth() + 1);
+
+            startDateInput.value = today.toISOString().split('T')[0];
+            endDateInput.value = nextMonth.toISOString().split('T')[0];
+
+            function updateDurationText() {
+                const sDate = new Date(startDateInput.value);
+                const eDate = new Date(endDateInput.value);
+                const badge = document.getElementById('durationBadge');
+                
+                if (isNaN(sDate) || isNaN(eDate) || sDate > eDate) {
+                    badge.innerText = "Invalid date range";
+                    badge.className = "inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 border border-red-200";
+                    return;
+                }
+
+                let months = (eDate.getFullYear() - sDate.getFullYear()) * 12 + (eDate.getMonth() - sDate.getMonth());
+                let days = eDate.getDate() - sDate.getDate();
+
+                if (days < 0) {
+                    months--;
+                    const lastMonth = new Date(eDate.getFullYear(), eDate.getMonth(), 0);
+                    days += lastMonth.getDate();
+                }
+
+                let text = "+";
+                if (months > 0) text += `${months} month${months > 1 ? 's' : ''} `;
+                if (days > 0 || months === 0) text += `${days} day${days !== 1 ? 's' : ''}`;
+                text += " to end";
+
+                badge.innerText = text;
+                badge.className = "inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200";
+            }
+
+            startDateInput.addEventListener('change', updateDurationText);
+            endDateInput.addEventListener('change', updateDurationText);
+            updateDurationText();
+        }
+
+        initDates();
+    </script>
+</body>
+</html>
